@@ -103,7 +103,6 @@ public:
 
 private:
     friend class Optimizer;
-    friend class Drawer;
     std::unordered_map<std::string, Node> nodes_;
     std::unordered_map<StrPair, Edge, pair_hash> edges_;
 
@@ -119,6 +118,8 @@ public:
 
     std::vector<Node*> odd_nodes();
 
+    std::vector<int> get_epoch_dist_logger();
+
     bool is_euler();
 
     void bleach_node(std::string label);
@@ -128,8 +129,6 @@ public:
     void DFS(Node* srcNode, std::vector<Path>& paths, const int& barrierColor, const int& targetColor);
 
     std::vector<Path> odd_node_connections(const std::string& label);
-
-    // std::vector<Path> separate_euler_path();
 
     std::string find_center(const std::vector<std::string>& labelNodes, int& distLog);
 
@@ -143,43 +142,6 @@ private:
     void DFS_step(Node* currentNode, int currentDistance, std::vector<std::string>& currentTrack, std::vector<Path>& paths, const int& barrierColor, const int& targetColor);
 
     void graph_k_means_step(std::vector<std::string>& centers, std::vector<int>* distLogs);
-};
-
-class Drawer {
-
-typedef struct Point{
-    float x = INF;
-    float y = INF;
-    inline bool fixed() { return x != INF; }
-    Point operator+(const Point& another) {
-        return {x + another.x, y + another.y};
-    }
-} Point;
-
-public:
-    explicit Drawer(Graph& graph) : graph_(&graph) {
-        for(const auto& element : graph_->nodes_){
-            const std::string& label = element.second.label_;
-            coordinates_[label] = {INF, INF};
-        }
-    }
-
-    std::pair<float, float> get_coordinate(const std::string& nodeLabel);
-
-    void fix_node(const std::string srcLabel);
-
-private:
-    Graph* graph_;
-
-    std::unordered_map<std::string, Point> coordinates_;
-
-    float distance_on_canvas(const Point& p1, const Point& p2);
-
-    float distance_on_graph(const std::string& label1, const std::string& label2);
-
-    std::pair<Point, Point> circle_intersection(const Point& p1, const Point& p2, const float& r1, const float& r2);
-
-    void fix_node_step(const std::string& nodeLabel);
 };
 
 #endif

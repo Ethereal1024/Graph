@@ -150,7 +150,8 @@ void Graph::connect(const std::string& label1, const std::string& label2, const 
 
             auto connection0 = node1->connections_[0];
         } else {
-            std::cerr << "Error: connection already exists." << std::endl;
+            return;
+            // std::cerr << "Error: connection already exists." << std::endl;
         }
     } else {
         std::cerr << "Error: label not found." << std::endl;
@@ -322,6 +323,10 @@ std::vector<Node*> Optimizer::odd_nodes() {
     return oddNodes;
 }
 
+std::vector<int> Optimizer::get_epoch_dist_logger() {
+    return epoch_dist_logger_;
+}
+
 bool Optimizer::is_euler() {
     int n_odd = odd_nodes().size();
     return (n_odd == 0 || n_odd == 2);
@@ -389,33 +394,6 @@ std::vector<Path> Optimizer::odd_node_connections(const std::string& label) {
     return result;
 }
 
-/*
-std::vector<Path> Optimizer::separate_euler_path() {
-    std::vector<Node*> oddNodes = odd_nodes();
-    std::vector<std::vector<Path>> oddNodePaths;
-
-    auto pathCmp = [](const Path& a, const Path& b) {
-        return a.dist_ < b.dist_;
-    };
-
-    auto vectorSizeCmp = [](const std::vector<Path>& a, const std::vector<Path>& b) {
-        return a.size() > b.size();
-    };
-
-    for (Node* oddNode : oddNodes) {
-        std::vector<Path> currentOddNodePath = odd_node_connections(oddNode->label_);
-        std::sort(currentOddNodePath.begin(), currentOddNodePath.end(), pathCmp);
-        oddNodePaths.push_back(currentOddNodePath);
-    }
-    std::sort(oddNodePaths.begin(), oddNodePaths.end(), vectorSizeCmp);
-
-    std::vector<Path> result;
-    while(!oddNodePaths.empty()) {
-        result.push_back(oddNodePaths.back().back());
-    }
-}
-*/
-
 std::string Optimizer::find_center(const std::vector<std::string>& labelNodes, int& distLog) {
     std::unordered_map<std::string, int> sumDists;
     for (std::string label : labelNodes) {
@@ -459,8 +437,8 @@ void Optimizer::graph_k_means_step(std::vector<std::string>& centers, std::vecto
         groups[master_index].push_back(node.label_);
     }
 
-    delete distLogs;
-    distLogs = new std::vector<int>(centers.size());
+    distLogs->clear();
+    distLogs->resize(centers.size(), 0);
     for (int i = 0; i < centers.size(); i++) {
         int distLog;
         centers[i] = find_center(groups[i], distLog);
@@ -479,255 +457,4 @@ void Optimizer::graph_k_means(std::vector<std::string>& startCenters, const int&
         }
         epoch_dist_logger_.push_back(sumDist);
     }
-}
-
-float Drawer::distance_on_canvas(const Point& p1, const Point& p2) {
-    if (p1.x == INF || p2.x == INF) {
-        return INF;
-    }
-    int deltaX = p1.x - p2.x;
-    int deltaY = p1.y - p2.y;
-    return sqrt(deltaX * deltaX + deltaY * deltaY);
-}
-
-float Drawer::distance_on_graph(const std::string& label1, const std::string& label2) {
-    Edge* edge = graph_->edge(label1, label2);
-    if (edge == nullptr) {
-        return INF;
-    } else {
-        return edge->length;
-    }
-}
-
-std::pair<Drawer::Point, Drawer::Point> Drawer::circle_intersection(const Point& p1, const Point& p2, const float& r1, const float& r2) {
-    float x1 = p1.x;
-    float x2 = p2.x;
-    float y1 = p1.y;
-    float y2 = p2.y;
-
-    // std::cout << "\np1: (" << p1.x << ", " << p1.y << ")\n";
-    // std::cout << "p2: (" << p2.x << ", " << p2.y << ")\n";
-    // std::cout << "r1: " << r1 << "\n";
-    // std::cout << "r2: " << r2 << "\n";
-
-    float originDistance = distance_on_canvas(p1, p2);
-    // std::cout << originDistance << "\n";
-    if (originDistance >= (r1 + r2)) {
-
-        // std::cout << originDistance << std::endl;
-
-        float x = x1 + (x2 - x1) * (r1 / r2);
-        float y = y1 + (y2 - y1) * (r1 / r2);
-        return std::pair<Point, Point>({{x, y}, {x, y}});
-    }
-
-    if (x1 == x2) {
-        float x = x1;
-        float yUp, yDown, rUp, rDown;
-        if (y1 < y2) {
-            yUp = y2;
-            yDown = y1;
-            rUp = r2;
-            rDown = r1;
-        } else {
-            yUp = y1;
-            yDown = y2;
-            rUp = r1;
-            rDown = r2;
-        }
-        float h = yUp - yDown;
-        float t = abs((rUp * rUp - rDown * rDown + h * h) / (2 * h));
-        float d = sqrt(rUp * rUp - t * t);
-        float y = yUp - t;
-        Point result1 = {x - d, y};
-        Point result2 = {x + d, y};
-        return std::pair<Point, Point>({result1, result2});
-    }
-
-    else if (y1 == y2) {
-        float y = y1;
-        float xLeft, xRight, rLeft, rRight;
-        if (x1 < x2) {
-            xLeft = x1;
-            xRight = x2;
-            rLeft = r1;
-            rRight = r2;
-        } else {
-            xLeft = x2;
-            xRight = x1;
-            rLeft = r2;
-            rRight = r1;
-        }
-        float d = xRight - xLeft;
-        float t = abs((rRight * rRight - rLeft * rLeft + d * d) / (2 * d));
-        float h = sqrt(rRight * rRight - t * t);
-        float x = xRight - t;
-        Point result1 = {x, y - h};
-        Point result2 = {x, y + h};
-        return std::pair<Point, Point>({result1, result2});
-    }
-
-    else {
-        float k1 = (y1 - y2) / (x1 - x2);
-        float k2 = -(x1 - x2) / (y1 - y2);
-        float b1 = (x1 * y2 - x2 * y1) / (x1 - x2);
-        float b2 = -(r1 * r1 - x1 * x1 - y1 * y1 - r2 * r2 + x2 * x2 + y2 * y2) / (2 * (y1 - y2));
-
-        // std::cout << k1 << " " << b1 << "\n" << k2 << " " << b2 << "\n";
-
-        float xMid = -(b1 - b2) / (k1 - k2);
-        float xLeft, xRight;
-        if (x1 < x2) {
-            xLeft = x1 - r1;
-            xRight = x2 + r2;
-        } else {
-            xLeft = x2 - r2;
-            xRight = x1 + r1;
-        }
-
-        float begin1 = xLeft, end1 = xMid, begin2 = xRight, end2 = xMid;
-        float test1 = (begin1 + end1) / 2;
-        float test2 = (begin2 + end2) / 2;
-
-        auto search = [&](float& test, float& begin, float& end, const float& r, const Point& p) {
-            while (abs(end - begin) > 0.01) {
-                // std::cout << begin << " " << test << " " << end << "\n";
-                // system("pause");
-                Point testPoint = {test, k2 * test + b2};
-                if (distance_on_canvas(testPoint, p) < r) {
-                    end = test;
-                } else if (distance_on_canvas(testPoint, p) > r) {
-                    begin = test;
-                } else {
-                    break;
-                }
-                test = (begin + end) / 2;
-            }
-        };
-
-        search(test1, begin1, end1, r1, p1);
-        search(test2, begin2, end2, r2, p2);
-
-        Point result1 = {test1, k2 * test1 + b2};
-        Point result2 = {test2, k2 * test2 + b2};
-        return std::pair<Point, Point>({result1, result2});
-    }
-}
-
-void Drawer::fix_node_step(const std::string& nodeLabel) {
-    if (coordinates_[nodeLabel].fixed()) {
-        return;
-    }
-
-    std::vector<std::string> fixedNeighbors;
-    for (auto it = coordinates_.begin(); fixedNeighbors.size() < 3 && it != coordinates_.end(); ++it) {
-        if (it->second.fixed() && graph_->edge(it->first, nodeLabel) != nullptr) {
-            fixedNeighbors.push_back(it->first);
-        }
-    }
-
-    if (fixedNeighbors.size() == 0) {
-        coordinates_[nodeLabel] = {0, 0};
-    }
-
-    else if (fixedNeighbors.size() == 1) {
-        std::string neighborLabel = fixedNeighbors[0];
-        std::vector<Node*> neighborNeighbors = graph_->nodes_[neighborLabel].get_neighbors();
-        int index = 0;
-        for (int i = 0; i < neighborNeighbors.size(); i++) {
-            if (neighborNeighbors[i]->label_ == nodeLabel) {
-                index = i;
-            }
-        }
-        float len = graph_->edge(neighborLabel, nodeLabel)->length;
-        Point pointDelta;
-        if (index % 4 == 0) {
-            pointDelta = Point({len, 0});
-        } else if (index % 4 == 1) {
-            pointDelta = Point({0, len});
-        } else if (index % 4 == 2) {
-            pointDelta = Point({-len, 0});
-        } else {
-            pointDelta = Point({0, -len});
-        }
-        coordinates_[nodeLabel] = coordinates_[neighborLabel] + pointDelta;
-    }
-
-    else {
-        std::string label1 = fixedNeighbors[0];
-        std::string label2 = fixedNeighbors[1];
-
-        const Point& point1 = coordinates_[label1];
-        const Point& point2 = coordinates_[label2];
-
-        float len1 = graph_->edge(label1, nodeLabel)->length;
-        float len2 = graph_->edge(label2, nodeLabel)->length;
-
-        std::pair<Point, Point> choise = circle_intersection(point1, point2, len1, len2);
-
-        Point point3;
-        std::string label3;
-        if (fixedNeighbors.size() == 2) {
-            std::vector<Node*> node1Neighbors = graph_->nodes_[label1].get_neighbors();
-            for (auto neighbor : node1Neighbors) {
-                Point& candidate = coordinates_[neighbor->label_];
-                if (candidate.fixed()) {
-                    point3 = candidate;
-                    label3 = neighbor->label_;
-                    break;
-                }
-            }
-        } else {
-            point3 = coordinates_[fixedNeighbors[2]];
-        }
-
-        float graphDistance = distance_on_graph(nodeLabel, label3);
-        float cost1 = abs(graphDistance - distance_on_canvas(choise.first, point3));
-        float cost2 = abs(graphDistance - distance_on_canvas(choise.second, point3));
-
-        coordinates_[nodeLabel] = cost1 < cost2 ? choise.first : choise.second;
-    }
-    // std::cout << "(" << coordinates_[nodeLabel].x << "," << coordinates_[nodeLabel].y << ")" << std::endl;
-}
-
-std::pair<float, float> Drawer::get_coordinate(const std::string& nodeLabel) {
-    Point coordinate = coordinates_[nodeLabel];
-    if (!coordinate.fixed()) {
-        std::cerr << "Error: node not fixed." << std::endl;
-    }
-    float x = std::round(coordinate.x * 100.0f) / 100.0f;
-    float y = std::round(coordinate.y * 100.0f) / 100.0f;
-    return std::pair<float, float>({x, y});
-}
-
-void Drawer::fix_node(const std::string srcLabel) {
-    std::queue<std::string> fixQueue;
-    fixQueue.push(srcLabel);
-    graph_->nodes_[srcLabel].color_ = COLOR::RED;
-    while (!fixQueue.empty()) {
-        std::string& label = fixQueue.front();
-        // std::cout << label << " ";
-        
-        fix_node_step(label);
-
-        // auto coordinate = coordinates_[label];
-        // std::cout << "\\node[draw, circle] (" << label << ") at (" << coordinate.x / 4 << ", " << coordinate.y / 4;
-        // if (label.size() > 1) {
-        //     label = "\\" + label;
-        // }
-        // std::cout << ") {$" << label << "$};\n";
-        // system("pause");
-
-        std::vector<Node*> neighbors = graph_->nodes_[label].get_neighbors();
-        for (Node* neighbor : neighbors) {
-            const std::string& neighborLabel = neighbor->label_;
-            if (graph_->nodes_[neighborLabel].color_ != COLOR::RED) {
-                fixQueue.push(neighborLabel);
-                graph_->nodes_[neighborLabel].color_ = COLOR::RED;
-            }
-        }
-
-        fixQueue.pop();
-    }
-    // std::cout << "\n";
 }
