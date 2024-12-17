@@ -59,7 +59,8 @@ void Edge::print_edge() {
     for (int i = 0; i < side_l - right_l + 1; i++) {
         std::cout << "-";
     }
-    std::cout << endpoints_.second->label_ << std::endl;
+    std::cout << endpoints_.second->label_;
+    std::cout << "  color: " << color_ << std::endl;
 }
 
 void Path::print_path() {
@@ -238,6 +239,14 @@ Edge* Graph::edge(const std::string& label1, const std::string& label2) {
     }
 }
 
+Edge* Graph::edge(const StrPair& labelPair) {
+    return edge(labelPair.first, labelPair.second);
+}
+
+Edge* Graph::edge(const std::pair<Node*, Node*>& nodePair) {
+    return edge(nodePair.first->label_, nodePair.second->label_);
+}
+
 void Graph::operator=(const Graph& srcGraph) {
     nodes_ = srcGraph.get_nodes();
     edges_ = srcGraph.get_edges();
@@ -342,17 +351,23 @@ void Optimizer::bleach_all_nodes() {
     }
 }
 
+void Optimizer::bleach_all_edges() {
+    for (auto element : graph_->edges_) {
+        element.second.color_ = -1;
+    }
+}
+
 void Optimizer::DFS_step(Node* currentNode, int currentDistance, std::vector<std::string>& currentTrack, std::vector<Path>& paths, const int& barrierColor, const int& targetColor) {
-    if (currentNode->color_ == barrierColor) {
+    if (graph_->nodes_[currentNode->label_].color_ == barrierColor) {
         return;
     }
-    if (currentNode->color_ == targetColor) {
+    if (graph_->nodes_[currentNode->label_].color_ == targetColor) {
         paths.push_back({currentDistance, currentTrack});
-        currentNode->color_ = barrierColor;
+        graph_->nodes_[currentNode->label_].color_ = barrierColor;
         return;
     }
 
-    currentNode->color_ = barrierColor;
+    graph_->nodes_[currentNode->label_].color_ = barrierColor;
 
     auto neighbors = currentNode->get_neighbors();
     for (auto neighbor : neighbors) {
@@ -444,6 +459,10 @@ void Optimizer::graph_k_means_step(std::vector<std::string>& centers, std::vecto
         centers[i] = find_center(groups[i], distLog);
         (*distLogs)[i] = distLog;
     }
+    // for (auto dist : *distLogs) {
+    //     std::cout << dist << " ";
+    // }
+    // std::cout << "\n";
 }
 
 void Optimizer::graph_k_means(std::vector<std::string>& startCenters, const int& epochs) {
@@ -456,5 +475,190 @@ void Optimizer::graph_k_means(std::vector<std::string>& startCenters, const int&
             sumDist += dist;
         }
         epoch_dist_logger_.push_back(sumDist);
+    }
+}
+
+std::unordered_map<int, Graph> Optimizer::separate_graph_by_colors() {
+    std::unordered_map<int, Graph> separatedGraphs;
+    for (auto elem : graph_->nodes_) {
+        auto& node = elem.second;
+        if (separatedGraphs.find(node.color_) == separatedGraphs.end()) {
+            separatedGraphs[node.color_] = Graph();
+        }
+
+        separatedGraphs[node.color_].add_node(node.label_);
+        for (const auto& neighbor : node.get_neighbors()) {
+            if (neighbor->color_ == node.color_) {
+                separatedGraphs[node.color_].add_node(neighbor->label_);
+                int length = graph_->edge(node.label_, neighbor->label_)->length;
+                separatedGraphs[node.color_].connect(node.label_, neighbor->label_, length);
+            }
+        }
+    }
+    return separatedGraphs;
+}
+
+void Optimizer::node_enclosure(const std::string& srcNodeLabel, int numArea) {
+    bleach_all_nodes();
+    Node& srcNode = graph_->nodes_[srcNodeLabel];
+    graph_->nodes_[srcNodeLabel].color_ = numArea;
+    std::vector<std::shared_ptr<std::queue<Node*>>> targetQueues;
+    std::vector<Node*> neighbors = srcNode.get_neighbors();
+    int size = numArea < neighbors.size() ? numArea : neighbors.size();
+    for (int i = 0; i < size; ++i) {
+        auto currentQueue = std::make_shared<std::queue<Node*>>();
+        currentQueue->push(neighbors[i]);
+        std::cout << currentQueue->front()->label_ << std::endl;
+        targetQueues.push_back(currentQueue);
+    }
+    std::vector<int> totalLengths(targetQueues.size(), 0);
+
+    bool end = 0;
+    while (!end) {
+        end = 1;
+        for (int i = 0; i < targetQueues.size(); ++i) {
+            auto& currentQueue = targetQueues[i];
+            if (!currentQueue->empty()) {
+                end = 0;
+                Node* currentNode = currentQueue->front();
+                graph_->nodes_[currentNode->label_].color_ = i;
+                for (auto& neighbor : currentNode->get_neighbors()) {
+                    int postColor = graph_->nodes_[neighbor->label_].color_;
+                    if (postColor == numArea)
+                        continue;
+                    if (postColor == -1 || totalLengths[postColor] > totalLengths[i]) {
+                        currentQueue->push(neighbor);
+                        totalLengths[i] += graph_->edge(currentNode->label_, neighbor->label_)->length;
+                    }
+                }
+                currentQueue->pop();
+            }
+        }
+    }
+}
+
+bool Optimizer::are_connected(const std::string& src, const std::string& dist, int edgeColor) {
+    graph_->nodes_[dist].color_ = -2;
+    std::vector<Path> paths;
+    DFS(&graph_->nodes_[src], paths, -3, -2);
+    if (paths.size() < 1) {
+        return false;
+    }
+    bool connectionExist = 0;
+    for (auto path : paths) {
+        const std::vector<std::string>& track = path.track_;
+        bool allColorCorrect = 1;
+        for (int i = 0; i < path.track_.size() - 1; ++i) {
+            if (graph_->edge(track[i], track[i + 1])->color_ != edgeColor) {
+                allColorCorrect = 0;
+            }
+        }
+        if (allColorCorrect) {
+            connectionExist = 1;
+        }
+    }
+    return connectionExist;
+}
+
+void Optimizer::edge_enclosure(const std::string& srcNodeLabel, int numArea) {
+    bleach_all_edges();
+    Node& srcNode = graph_->nodes_[srcNodeLabel];
+    graph_->nodes_[srcNodeLabel].color_ = numArea;
+    std::vector<std::shared_ptr<std::queue<Edge*>>> targetQueues;
+    std::vector<Node*> neighbors = srcNode.get_neighbors();
+    int size = numArea < neighbors.size() ? numArea : neighbors.size();
+    std::vector<int> totalLengths(size, 0);
+    // std::cout << "E" << std::endl;
+    for (int i = 0; i < size; ++i) {
+        auto currentQueue = std::make_shared<std::queue<Edge*>>();
+        Edge* neighborEdge = graph_->edge(srcNodeLabel, neighbors[i]->label_);
+        currentQueue->push(neighborEdge);
+        targetQueues.push_back(currentQueue);
+        totalLengths[i] += neighborEdge->length;
+    }
+
+    // std::cout << "A" << std::endl;
+    bool end = 0;
+    while (!end) {
+        end = 1;
+        for (int i = 0; i < targetQueues.size(); ++i) {
+            auto& currentQueue = targetQueues[i];
+            if (!currentQueue->empty()) {
+                end = 0;
+                Edge* currentEdge = currentQueue->front();
+                int originColor = graph_->edge(currentEdge->endpoints_)->color_;
+                graph_->edge(currentEdge->endpoints_)->color_ = i;
+
+                if (originColor != -1) {
+                    auto nodes = currentEdge->endpoints_;
+                    std::string label1 = nodes.first->label_;
+                    std::string label2 = nodes.second->label_;
+                    bool condition1 = are_connected(label1, srcNodeLabel, i);
+                    bool condition2 = are_connected(label1, srcNodeLabel, originColor);
+                    bool condition3 = are_connected(label2, srcNodeLabel, i);
+                    bool condition4 = are_connected(label2, srcNodeLabel, originColor);
+                    bool condition = (condition1 || condition2) && (condition3 || condition4);
+                    // bool condition = true;
+                    if (!condition) {
+                        graph_->edge(currentEdge->endpoints_)->color_ = originColor;
+                        currentQueue->pop();
+                        continue;
+                    }
+                }
+                // std::cout << "B" << std::endl;
+                for (auto& neighbor : currentEdge->get_neighbors()) {
+                    int postColor = graph_->edge(neighbor->endpoints_)->color_;
+                    if (postColor == numArea)
+                        continue;
+                    if (postColor == -1 || totalLengths[postColor] > totalLengths[i]) {
+                        currentQueue->push(neighbor);
+                        totalLengths[i] += neighbor->length;
+                    }
+                }
+                currentQueue->pop();
+            }
+        }
+    }
+}
+
+void Optimizer::flood(const std::string& srcNodeLabel, int numBranch) {
+    Graph pipeGraph = *graph_;
+    Node& srcNode = pipeGraph.nodes_[srcNodeLabel];
+    auto edgeCmp = [](const Edge* a, const Edge* b) {
+        return a->length > b->length;
+    };
+
+    bleach_all_edges();
+    std::vector<Node*> neighbors = srcNode.get_neighbors();
+    int size = numBranch < neighbors.size() ? numBranch : neighbors.size();
+    std::vector<int> totalLengths(size, 0);
+    std::vector<Edge*> floodingEdge;
+    for (int i = 0; i < size; ++i) {
+        Edge* neighborEdge = graph_->edge(srcNodeLabel, neighbors[i]->label_);
+        neighborEdge->color_ = i;
+        floodingEdge.push_back(neighborEdge);
+    }
+    std::sort(floodingEdge.begin(), floodingEdge.end(), edgeCmp);
+
+    while (!floodingEdge.empty()) {
+        for (auto& edge : floodingEdge) {
+            edge->print_edge();
+        }
+        system("pause");
+        int backLen = floodingEdge.back()->length;
+        for (auto& edge : floodingEdge) {
+            edge->length -= backLen;
+        }
+        while (floodingEdge.back()->length == 0) {
+            Edge* edge = *floodingEdge.begin();
+            for (auto& neighbor : edge->get_neighbors()) {
+                if (neighbor->color_ == -1) {
+                    floodingEdge.insert(floodingEdge.begin(), neighbor);
+                    neighbor->color_ = edge->color_;
+                }
+            }
+            floodingEdge.pop_back();
+        }
+        std::sort(floodingEdge.begin(), floodingEdge.end(), edgeCmp);
     }
 }

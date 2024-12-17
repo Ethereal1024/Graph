@@ -99,6 +99,10 @@ public:
 
     Edge* edge(const std::string& label1, const std::string& label2);
 
+    Edge* edge(const StrPair& labelPair);
+
+    Edge* edge(const std::pair<Node*, Node*>& nodePair);
+
     void operator=(const Graph& srcGraph);
 
 private:
@@ -124,7 +128,9 @@ public:
 
     void bleach_node(std::string label);
 
-    void bleach_all_nodes();  
+    void bleach_all_nodes();
+
+    void bleach_all_edges();
 
     void DFS(Node* srcNode, std::vector<Path>& paths, const int& barrierColor, const int& targetColor);
 
@@ -133,6 +139,16 @@ public:
     std::string find_center(const std::vector<std::string>& labelNodes, int& distLog);
 
     void graph_k_means(std::vector<std::string>& startCenters, const int& epoch);
+
+    std::unordered_map<int, Graph> separate_graph_by_colors();
+
+    void node_enclosure(const std::string& srcNodeLabel, int numArea);
+
+    bool are_connected(const std::string& src, const std::string& dist, int color);
+
+    void edge_enclosure(const std::string& srcNodeLabel, int numArea);
+
+    void flood(const std::string& srcNodeLabel, int numBranch);
 
 private:
     Graph* graph_;
