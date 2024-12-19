@@ -24,22 +24,44 @@ public:
 
 	inline void set_content(const T& newContent);
 
-	inline std::unordered_map<std::string, Element<T>*> contactors() const;
+	inline std::vector<Element<T>*> contactors() const;
 
-	inline void insert(const Element& another);
+	inline void insert(const Element<T>& another);
 
 	inline void remove(const std::string label);
 
-	inline void operator=(const Element& another);
+	inline void operator=(const Element<T>& another);
 
-	inline bool operator==(const Element& another) const;
+	inline bool operator==(const Element<T>& another) const;
 
 	inline int degree() const;
+
+	virtual std::vector<Element<T>*> neighbors();
+
+	virtual std::vector<std::string> neighbors_label();
 
 private:
 	std::string label_;
 	std::unordered_map<std::string, Element<T>*> contactors_;
 	T content_;
+};
+
+class Edge;
+
+template <typename T>
+class Vertex : private Element<T> {
+public:
+	void connect_to(const std::string& label);
+
+	void disconnect_from(const std::string& label);
+
+	std::vector<Vertex<T>*> neighbors() const override;
+
+	std::vector<std::string> neighbors_label() const override;
+private:
+	using Element<T>::insert;
+	
+	using Element<T>::remove;
 };
 
 #endif

@@ -21,12 +21,16 @@ void Element<T>::set_content(const T& newContent) {
 }
 
 template <typename T>
-std::unordered_map<std::string, Element<T>*> Element<T>::contactors() const {
-	return contactors_;
+std::vector<Element<T>*> Element<T>::contactors() const {
+	std::vector<Element<T>*> rst;
+	for(const auto& pair : contactors_) {
+		rst.push_back(pair.second);
+	}
+	return rst;
 }
 
 template <typename T>
-void Element<T>::insert(const Element& another) {
+void Element<T>::insert(const Element<T>& another) {
 	contactors[another.label] = &another;
 }
 
@@ -36,14 +40,14 @@ void Element<T>::remove(const std::string label) {
 }
 
 template <typename T>
-void Element<T>::operator=(const Element& another) {
+void Element<T>::operator=(const Element<T>& another) {
 	label_ = another.label();
 	contactors_ = another.contactors();
 	content_ = another.content();
 }
 
 template <typename T>
-bool Element<T>::operator==(const Element& another) const {
+bool Element<T>::operator==(const Element<T>& another) const {
 	return label_ == another.label() && contactors_ == another.contactors() && content == another.content();
 }
 
@@ -51,3 +55,6 @@ template <typename T>
 int Element<T>::degree() const {
 	return contactors_.size();
 }
+
+
+ 
